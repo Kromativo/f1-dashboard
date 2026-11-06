@@ -1,0 +1,1485 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>F1 Dashboard 2026</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script src="data/data.js"></script>
+<script src="data/historial.js"></script>
+<style>
+:root {
+  color-scheme: light;
+  --bg: #ffffff; --dot: #d3d7de; --card: #ffffff; --text: #1b1d22; --muted: #6b6f78; --line: #e3e0da; --accent: #e10600;
+}
+
+body {
+  margin: 0; color: var(--text); font: 14px/1.45 system-ui, -apple-system, sans-serif;
+  background-color: var(--bg);
+  background-image: radial-gradient(circle, var(--dot) 1px, transparent 1.5px);
+  background-size: 24px 24px;
+  background-attachment: fixed;
+  min-height: 100vh;
+}
+.foot { text-align: center; padding: 8px 16px 24px; color: var(--muted); font-size: 0.7rem; }
+.foot p { margin: 0; }
+main { display: grid; gap: 16px; padding: 16px; max-width: 1200px; margin: 0 auto; grid-template-columns: 1fr; }
+@media (min-width: 900px) {
+  main { grid-template-columns: 1fr 1fr; }
+  .wide { grid-column: 1 / -1; }
+}
+.card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px; min-width: 0; }
+.card h2 { margin: 0 0 4px; font-size: 1.05rem; }
+.card .hint { margin: 0 0 10px; color: var(--muted); font-size: 0.8rem; }
+.split { display: grid; gap: 16px; grid-template-columns: 1fr; }
+@media (min-width: 640px) { .split { grid-template-columns: 1fr 1fr; } }
+.wrap { overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: 6px 8px; border-bottom: 1px solid var(--line); text-align: left; white-space: nowrap; }
+th { color: var(--muted); font-weight: 600; font-size: 0.8rem; }
+td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+.heat th, .heat td { text-align: center; padding: 4px 6px; min-width: 36px; border-bottom: none; }
+.heat td { color: #fff; font-weight: 600; font-variant-numeric: tabular-nums; border-radius: 4px; }
+.heat td.na { background: transparent; color: var(--muted); font-weight: 400; }
+.heat th[scope="row"] { text-align: left; color: var(--text); }
+.chart-box { position: relative; height: 320px; }
+select { background: var(--card); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; margin-bottom: 10px; }
+.warn { margin: 16px; padding: 12px; border: 1px solid var(--accent); border-radius: 8px; }
+.empty[hidden] { display: none; }
+.thumb { width: 44px; height: 30px; object-fit: contain; vertical-align: middle; margin-right: 8px; }
+
+.weekend-picker { display: flex; align-items: center; gap: 12px; margin-bottom: 14px; }
+.weekend-picker input[type="range"] {
+  flex: 1; -webkit-appearance: none; appearance: none; height: 4px; margin: 0;
+  border: none; border-radius: 2px; background: #e3e5e9; outline: none;
+}
+.weekend-picker input[type="range"]::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none; width: 14.4px; height: 14.4px; border: none; border-radius: 50%; background: #9aa0a9;
+}
+.weekend-picker input[type="range"]::-moz-range-thumb { width: 14.4px; height: 14.4px; border: none; border-radius: 50%; background: #9aa0a9; }
+.weekend-picker span { font-weight: 400; white-space: nowrap; }
+.weekend-picker .tip-title:hover::after, .weekend-picker .tip-title:focus::after { left: auto; right: 0; }
+
+/* Flujo de posiciones: fotos a la izquierda, nodos por práctica y líneas entre ellos */
+.flow { display: grid; grid-template-columns: 56px 1fr; column-gap: 12px; }
+.flow-photos { position: relative; margin-top: 30px; }
+.flow-photo { position: absolute; left: 4px; width: 36px; height: 36px; border-radius: 50%; overflow: hidden; }
+.flow-photo img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 0%; }
+.flow-board { position: relative; min-width: 0; }
+.flow-heads { position: relative; height: 30px; }
+.flow-heads span { position: absolute; top: 6px; transform: translateX(-50%); font-weight: 600; color: var(--muted); font-size: 0.85rem; }
+.flow-canvas { position: relative; }
+.flow-canvas svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.flow-canvas path { fill: none; stroke-width: 1.5; stroke-linecap: round; vector-effect: non-scaling-stroke; }
+.flow-card { background: rgba(255, 255, 255, 0.8); }
+.flow-node {
+  position: absolute; width: 18px; height: 18px; margin: -9px 0 0 -9px; box-sizing: border-box;
+  border-radius: 50%; border: none; color: #ffffff;
+  display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.6rem;
+  line-height: 18px; height: 18px; font-variant-numeric: tabular-nums; text-align: center;
+}
+.flow-canvas path, .flow-node, .flow-photo { transition: opacity 0.2s; }
+.flow-photo { cursor: pointer; }
+.pick { cursor: pointer; border-radius: 4px; }
+.pick.selected { box-shadow: 0 0 0 2px var(--text); }
+.flow-lap {
+  position: absolute; transform: translate(-50%, -100%); margin-top: -12px;
+  font-size: 0.7rem; font-weight: 600; white-space: nowrap; pointer-events: none;
+  font-variant-numeric: tabular-nums;
+}
+/* Ficha con alto máximo: lo que no cabe se despliega con "Ver más" */
+.flow-wrap { position: relative; max-height: 440px; overflow: hidden; }
+.flow-wrap.expanded { max-height: none; overflow: visible; }
+.flow-fade {
+  position: absolute; left: 0; right: 0; bottom: 0; height: 120px;
+  display: flex; align-items: flex-end; justify-content: center; padding-bottom: 10px;
+  background: linear-gradient(to bottom, rgba(255, 255, 255, 0), #ffffff 75%);
+}
+.flow-fade[hidden], .flow-wrap.expanded .flow-fade { display: none; }
+.flow-more {
+  border: 1px solid var(--line); background: #ffffff; color: var(--muted);
+  border-radius: 999px; padding: 4px 14px; font: inherit; font-size: 0.8rem; cursor: pointer;
+}
+/* Ficha del piloto */
+.desk-alert {
+  position: fixed; top: 0; left: 0; right: 0; z-index: 10; padding: 8px 16px;
+  background: #1b1d22; color: #ffffff; font-size: 0.8rem; text-align: center;
+}
+.desk-alert[hidden] { display: none; }
+.sheet {
+  display: grid; grid-template-columns: 170px minmax(180px, 1fr) 220px minmax(260px, 1.2fr);
+  gap: 24px; align-items: center; text-align: left;
+}
+.sheet-photo {
+  height: 200px; border-radius: 12px; overflow: hidden; display: flex; align-items: flex-end; justify-content: center;
+}
+.sheet-photo img { width: 100%; height: 100%; object-fit: cover; object-position: 50% 0%; }
+.sheet-text h3 { margin: 0 0 2px; font-size: 1.15rem; }
+.sheet-team { color: var(--muted); margin-bottom: 14px; }
+.sheet-text dl { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; margin: 0; }
+.sheet-text dt { color: var(--muted); }
+.sheet-text dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; }
+.sheet-car { display: flex; flex-direction: column; gap: 10px; }
+.car-img { height: 120px; border-radius: 12px; background: #f1f2f4; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.sheet-car img { width: 100%; height: 100%; object-fit: contain; }
+.sheet-radar { position: relative; }
+.chart-wrap { position: relative; height: 260px; }
+.chart-box.tall { height: 520px; }
+.track { width: 300px; }
+.track svg { width: 100%; height: auto; display: block; background: #f7f8fa; border-radius: 12px; }
+.track svg path { fill: none; stroke: var(--text); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.track dl, .sheet-car dl { display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; margin: 0; }
+.track dt, .sheet-car dt { color: var(--muted); }
+.track dd, .sheet-car dd { margin: 0; font-weight: 600; font-variant-numeric: tabular-nums; text-align: right; }
+.flow-layout { display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 24px; align-items: start; }
+.tip { position: relative; cursor: help; text-decoration: underline dotted; text-underline-offset: 3px; }
+.tip-title { position: relative; cursor: help; }
+.tip:hover::after, .tip:focus::after, .tip-title:hover::after, .tip-title:focus::after {
+  content: attr(data-tip); position: absolute; left: 0; bottom: calc(100% + 6px); width: max-content; max-width: 320px;
+  padding: 6px 8px; border-radius: 6px; background: #1b1d22; color: #ffffff; font-size: 0.75rem; font-weight: 400;
+  line-height: 1.35; white-space: normal; z-index: 5;
+}
+@media (max-width: 1199px) { .sheet { grid-template-columns: 1fr; } }
+/* Tercera ficha: equipo en horizontal */
+.delta { font-size: 0.8rem; font-weight: 600; }
+.delta.up { color: #3671c6; }
+.delta.down { color: #d64545; }
+.team-top { display: flex; justify-content: space-between; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+.team-name { display: flex; align-items: center; gap: 8px; font-weight: 600; }
+.team-badge { background: #1b1d22; color: #ffffff; border-radius: 6px; padding: 2px 7px; font-size: 0.75rem; font-weight: 700; }
+.mode { display: inline-flex; background: #f1f2f4; border-radius: 999px; padding: 3px; }
+.mode-btn { border: 0; background: transparent; color: var(--muted); padding: 5px 14px; border-radius: 999px; font: inherit; font-size: 0.8rem; cursor: pointer; }
+.mode-btn.is-on { background: #ffffff; color: var(--text); font-weight: 600; box-shadow: 0 1px 2px rgba(0, 0, 0, 0.12); }
+.team-slots { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 12px; }
+.tslot { border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: #ffffff; min-width: 0; }
+.tslot.divider { margin-left: 10px; }
+.tslot .head { height: 100px; position: relative; display: flex; align-items: flex-end; justify-content: center; }
+.tslot .head img { height: 100px; width: 100%; object-fit: contain; }
+.tslot .boost { position: absolute; top: 8px; left: 8px; background: #1b1d22; color: #ffffff; font-size: 0.7rem; font-weight: 700; border-radius: 6px; padding: 2px 6px; }
+.tslot .body { padding: 8px 10px; }
+.tslot .name { font-weight: 700; font-size: 0.85rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.tslot .price { display: flex; justify-content: space-between; align-items: baseline; margin-top: 2px; }
+.team-foot { display: flex; justify-content: space-between; align-items: center; gap: 16px; flex-wrap: wrap; margin: 12px 0 0; color: var(--muted); font-size: 0.8rem; }
+.chips { display: flex; gap: 8px; }
+.chip { position: relative; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; cursor: help; }
+.chip svg.icon { width: 16px; height: 16px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.chip.used { opacity: 0.35; filter: grayscale(1); }
+.chip .lock { position: absolute; top: -3px; right: -3px; width: 11px; height: 11px; background: #ffffff; border-radius: 50%; stroke: #1b1d22; stroke-width: 2.6; fill: none; stroke-linecap: round; }
+.chips .tip:hover::after, .chips .tip:focus::after { left: auto; right: 0; }
+.mode-groups { display: flex; gap: 16px; align-items: center; flex-wrap: wrap; }
+.mode-group { display: flex; align-items: center; gap: 8px; }
+.owner { font-size: 0.8rem; color: var(--muted); font-weight: 600; }
+/* Predicciones: preguntas a la izquierda, respuestas a la derecha */
+.pred-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); gap: 24px; padding: 16px 0; border-bottom: 1px solid var(--line); align-items: center; }
+.pred-row:last-child { border-bottom: 0; }
+.pred-q { text-align: left; }
+.pred-q .num { font-weight: 700; color: var(--muted); font-size: 0.8rem; }
+.pred-q h3 { margin: 4px 0 4px; font-size: 1rem; }
+.hist { width: 100%; border-collapse: collapse; font-size: 0.82rem; }
+.hist th, .hist td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line, #e3e0da); vertical-align: top; }
+.pred-summary { margin: 0 0 8px; font-size: 0.9rem; }
+.pred-q p.verdict { margin: 0 0 10px; }
+.pred-q p { margin: 0 0 10px; color: var(--muted); font-size: 0.85rem; }
+.chip-btn { border: 1px solid var(--line); background: #ffffff; color: var(--muted); border-radius: 999px; padding: 4px 12px; font: inherit; font-size: 0.75rem; cursor: pointer; }
+.chip-btn.on { background: #1b1d22; color: #ffffff; border-color: #1b1d22; }
+.pred-a { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.opt { display: flex; align-items: center; gap: 10px; border: 1px solid var(--line); background: #f7f8fa; border-radius: 12px; padding: 10px 14px; cursor: pointer; font: inherit; color: var(--text); text-align: left; }
+.opt.on { background: #ffffff; border-color: var(--text); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12); }
+.opt .radio { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--text); flex: none; }
+.opt.on .radio { background: var(--text); box-shadow: inset 0 0 0 3px #ffffff; }
+.pts { background: #eef0f3; border-radius: 999px; padding: 2px 8px; font-size: 0.75rem; color: var(--muted); white-space: nowrap; }
+.slot { width: 92px; height: 116px; border: 1px dashed #c9cdd4; border-radius: 12px; background: #f7f8fa; display: flex; align-items: center; justify-content: center; color: var(--muted); font-size: 1.4rem; }
+.slot.wide { width: 100%; max-width: 360px; height: 64px; font-size: 1.1rem; }
+.podium { display: flex; align-items: flex-end; gap: 12px; }
+.podium .place { display: flex; flex-direction: column; align-items: center; gap: 6px; color: var(--muted); font-size: 0.8rem; font-weight: 600; }
+.podium .place.second .slot { height: 90px; }
+.podium .place.first .slot { height: 116px; }
+.podium .place.third .slot { height: 74px; }
+.duel { display: flex; align-items: center; gap: 12px; }
+.duel-card { width: 130px; border: 1px solid var(--line); border-radius: 12px; overflow: hidden; background: #ffffff; cursor: pointer; padding: 0; font: inherit; color: var(--text); }
+.duel-card.on { border-color: var(--text); box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12); }
+.duel-card .head { height: 86px; display: flex; align-items: flex-end; justify-content: center; }
+.duel-card .head img { height: 86px; width: 100%; object-fit: contain; }
+.duel-card .body { padding: 6px 8px; font-size: 0.8rem; font-weight: 700; text-align: left; }
+.duel-card .body .pts { margin-top: 4px; display: inline-block; }
+.duel .vs { width: 34px; height: 34px; border-radius: 50%; background: #ffffff; border: 1px solid var(--line); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 0.7rem; }
+.list-row { display: flex; align-items: center; gap: 12px; border: 1px solid var(--line); background: #f7f8fa; border-radius: 12px; padding: 6px 12px 6px 6px; cursor: pointer; width: 100%; max-width: 360px; font: inherit; color: var(--text); text-align: left; }
+.list-row.on { background: #ffffff; border-color: var(--text); }
+.list-row .radio { width: 16px; height: 16px; border-radius: 50%; border: 2px solid var(--text); flex: none; }
+.list-row.on .radio { background: var(--text); box-shadow: inset 0 0 0 3px #ffffff; }
+.list-row img { width: 40px; height: 40px; border-radius: 50%; object-fit: cover; object-position: 50% 0%; flex: none; }
+.list-row .name { flex: 1; font-weight: 600; }
+.yesno { display: flex; gap: 12px; }
+.yesno .opt { flex-direction: column; justify-content: center; width: 150px; height: 90px; font-size: 1.2rem; font-weight: 700; }
+.yesno .opt .pts { font-size: 0.8rem; font-weight: 400; }
+.slider-box { width: 100%; max-width: 360px; }
+.slider-box .value { font-size: 1.6rem; font-weight: 700; margin-bottom: 8px; }
+.slider-box input[type="range"] { width: 100%; accent-color: #8a8f98; }
+.slider-box .scale { display: flex; justify-content: space-between; color: var(--muted); font-size: 0.75rem; }
+/* Ranuras editables de predicciones */
+.pick-box { display: flex; flex-direction: column; gap: 6px; width: 120px; }
+.pick-box.wide { width: 100%; max-width: 360px; }
+.pick-slot { height: 96px; border-radius: 12px; border: 1px dashed #c9cdd4; background: #f7f8fa; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+.pick-slot img { width: 100%; height: 100%; object-fit: contain; }
+.pick-empty { color: var(--muted); font-size: 1.4rem; }
+.pick-box select { font: inherit; font-size: 0.8rem; border: 1px solid var(--line); border-radius: 8px; padding: 4px 6px; background: #ffffff; color: var(--text); }
+.podium .place { display: flex; flex-direction: column; align-items: center; gap: 6px; color: var(--muted); font-size: 0.8rem; font-weight: 600; }
+.podium .place.second .pick-slot { height: 80px; }
+.podium .place.first .pick-slot { height: 104px; }
+.podium .place.third .pick-slot { height: 66px; }
+#pred-reset { margin-bottom: 10px; }
+</style>
+</head>
+<body class="locked">
+<style>
+body.locked > :not(#gate) { display: none !important; }
+#gate { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: #f7f5f1; z-index: 9999; }
+#gate form { display: flex; flex-direction: column; gap: 10px; width: min(320px, 86vw); text-align: center; font-family: inherit; }
+#gate input { padding: 10px 12px; font-size: 1rem; border: 1px solid #c9c5bd; border-radius: 8px; }
+#gate button { padding: 10px 12px; font-size: 1rem; border: 0; border-radius: 8px; background: #22252b; color: #fff; cursor: pointer; }
+#gate .err { color: #b3261e; min-height: 1.2em; font-size: 0.85rem; margin: 0; }
+</style>
+<div id="gate">
+  <form id="gate-form">
+    <h1 style="font-size:1.2rem;margin:0">F1 Dashboard 2026</h1>
+    <input type="password" id="gate-pass" placeholder="Contraseña" autocomplete="current-password" autofocus aria-label="Contraseña">
+    <button type="submit">Entrar</button>
+    <p class="err" id="gate-err"></p>
+  </form>
+</div>
+<script>
+// Filtro mínimo, no es seguridad real: la clave se compara por hash en el navegador y los datos siguen siendo públicos.
+(() => {
+  const HASH = '00893dc99c348785ab977114e1e5f331dd6c9c2c263ebc6432a223d7b9c1c2dc';
+  const open = () => { document.body.classList.remove('locked'); const g = document.getElementById('gate'); if (g) g.remove(); };
+  const sha = async (t) => Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode(t)))).map((b) => b.toString(16).padStart(2, '0')).join('');
+  let ok = false;
+  try { ok = localStorage.getItem('f1-acceso') === HASH; } catch (e) { /* sin almacenamiento */ }
+  if (ok || !window.crypto || !crypto.subtle) { open(); return; }
+  document.getElementById('gate-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    if (await sha(document.getElementById('gate-pass').value) === HASH) {
+      try { localStorage.setItem('f1-acceso', HASH); } catch (err) { /* sin almacenamiento */ }
+      open();
+    } else {
+      document.getElementById('gate-err').textContent = 'Contraseña incorrecta';
+    }
+  });
+})();
+</script>
+
+<div class="desk-alert" id="desk-alert" hidden>Esta vista está pensada para escritorio. Necesitas una pantalla de al menos 1200 px de ancho.</div>
+<main>
+  <section class="card wide" id="no-data" hidden>
+    <p>No hay datos todavía. Corre <code>python3 fetch_data.py</code> en la carpeta del proyecto.</p>
+  </section>
+
+  <section class="card wide flow-card">
+    <div class="weekend-picker">
+      <input type="range" id="weekend-slider" min="0" max="0" value="0" aria-label="Fin de semana">
+      <span id="weekend-label" class="tip-title" tabindex="0" data-tip="Cada columna es una sesión del fin de semana (prácticas, sprint, clasificación y carrera). Cada círculo es la posición de un piloto en esa sesión: 1 arriba, más abajo cuanto peor. Una línea que sube es un piloto que gana posiciones; una que baja, que las pierde. Las prácticas y la clasificación usan la mejor vuelta; sprint y carrera, la vuelta más rápida. Toca una foto para resaltar a ese piloto."></span>
+    </div>
+    <div class="flow-layout">
+    <div class="flow-wrap" id="flow-wrap">
+      <div class="flow" id="flow"></div>
+      <div class="flow-fade" id="flow-fade" hidden>
+        <button type="button" class="flow-more" id="flow-more">Ver más</button>
+      </div>
+    </div>
+    <aside class="track" id="track"></aside>
+    </div>
+  </section>
+
+  <section class="card wide sheet">
+    <div class="sheet-photo" id="sheet-photo"></div>
+    <div class="sheet-text" id="sheet-text"></div>
+    <div class="sheet-car" id="sheet-car"></div>
+    <div class="sheet-radar">
+      <div class="chart-wrap"><canvas id="radar-chart"></canvas></div>
+      <p class="hint">Más área, más probabilidad de ganar. Ritmo: diferencia con la vuelta más rápida de cada fin de semana; mezcla la temporada con las prácticas del fin de semana en curso. Resultado: posición promedio al final de la carrera. Ritmo, resultado y fiabilidad dan más peso a las carreras recientes. Fiabilidad: carreras sin abandono.</p>
+    </div>
+  </section>
+
+  <section class="card wide team-card">
+    <div class="team-top">
+      <div class="team-name tip-title" tabindex="0" data-tip="Equipo de Fantasy. Actual: la alineación real del equipo. Sugerida: la mejor combinación según las métricas dentro del presupuesto. Pie: costo, dinero disponible y fuerza estimada, para comparar actual contra sugerida. Chips a la derecha: a color los disponibles, atenuados los usados."><span class="team-badge">T1</span> <span id="team-title"></span></div>
+      <div class="mode-groups" role="group" aria-label="Equipo y modo de visualización">
+        <div class="mode-group">
+          <span class="owner">Richard</span>
+          <div class="mode">
+            <button type="button" class="mode-btn is-on" data-owner="richard" data-mode="actual">Actual</button>
+            <button type="button" class="mode-btn" data-owner="richard" data-mode="sugerida" title="Hasta 2 cambios, gratis">Sugerida</button>
+            <button type="button" class="mode-btn" data-owner="richard" data-mode="sobregiro" title="Cambios sin límite: puede costar puntos por transferencias extra">Sobregiro</button>
+          </div>
+        </div>
+        <div class="mode-group">
+          <span class="owner">Mayra</span>
+          <div class="mode">
+            <button type="button" class="mode-btn" data-owner="mayra" data-mode="actual">Actual</button>
+            <button type="button" class="mode-btn" data-owner="mayra" data-mode="sugerida" title="Hasta 2 cambios, gratis">Sugerida</button>
+            <button type="button" class="mode-btn" data-owner="mayra" data-mode="sobregiro" title="Cambios sin límite: puede costar puntos por transferencias extra">Sobregiro</button>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="team-slots" id="team-slots"></div>
+    <div class="team-foot">
+      <span id="team-foot-text"></span>
+      <div class="chips" id="chips"></div>
+    </div>
+  </section>
+
+  <section class="card wide predict">
+    <h2 class="tip-title" tabindex="0" data-tip="Predicciones de la sesión del fin de semana. A la izquierda, cada pregunta y lo que vale cada respuesta. A la derecha, tus respuestas. Solo puedes aplicar un chip 2x por fin de semana. Cuando haya preguntas nuevas, tus respuestas se guardan en este navegador. Los aciertos de fines de semana pasados están en el historial.">Predicciones</h2>
+    <button type="button" class="chip-btn" id="pred-reset" hidden>Restablecer respuestas registradas</button>
+    <div id="pred-summary"></div>
+    <div class="pred-list" id="pred-list"></div>
+  </section>
+
+  <section class="card wide" id="historial-card">
+    <h2 class="tip-title" tabindex="0" data-tip="Registro permanente de tus predicciones contra los resultados reales. Se guarda en data/historial.db y se exporta a data/historial.js con registro.py.">Historial de predicciones</h2>
+    <div id="historial"></div>
+  </section>
+
+  <section class="card wide">
+    <h2 class="tip-title" tabindex="0" data-tip="Tabla oficial del campeonato de pilotos y constructores. Sirve como referencia; no mide ritmo ni probabilidades.">Clasificación</h2>
+    <p class="hint">Puntos de campeonato oficiales (carrera + sprint). No son puntos de Fantasy.</p>
+    <div class="flow-wrap" id="std-wrap">
+      <div class="split">
+        <div class="wrap"><div id="std-drivers"></div></div>
+        <div class="wrap"><div id="std-constructors"></div></div>
+      </div>
+      <div class="flow-fade" hidden>
+        <button type="button" class="flow-more">Ver más</button>
+      </div>
+    </div>
+  </section>
+
+  <section class="card wide">
+    <h2 class="tip-title" tabindex="0" data-tip="Promedio de posiciones ganadas en la temporada: salida menos llegada en cada carrera. Positivo: el piloto suele subir durante la carrera. Negativo: suele bajar. Las salidas desde pit lane no cuentan. Los abandonos cuentan con la posición en que quedaron clasificados.">Posiciones ganadas en promedio</h2>
+    <p class="hint">Promedio de posiciones ganadas desde la parrilla en la temporada. Positivo: sube durante la carrera.</p>
+    <div class="chart-box tall"><canvas id="gained-chart"></canvas></div>
+  </section>
+
+  <section class="card">
+    <h2 class="tip-title" tabindex="0" data-tip="Puntos sumados de los 8 primeros pilotos, carrera más sprint, acumulados ronda a ronda. Cuanto más empinada la línea, más puntos sumó el piloto en esa ronda.">Puntos acumulados</h2>
+    <p class="hint">Top 8 de pilotos, carrera + sprint.</p>
+    <div class="chart-box"><canvas id="cum-chart"></canvas></div>
+  </section>
+
+  <section class="card">
+    <h2 class="tip-title" tabindex="0" data-tip="Puntos de campeonato contra el precio actual de cada piloto o escudería. Arriba a la derecha están los que dan más puntos por su precio. La tabla ordena por puntos por millón de dólares: más alto, mejor valor.">Valor</h2>
+    <p class="hint">Puntos de campeonato contra precio actual. Más puntos por millón, mejor valor.</p>
+    <div class="chart-box"><canvas id="value-chart"></canvas></div>
+    <div class="wrap" id="value-table"></div>
+  </section>
+
+  <section class="card wide">
+    <h2 class="tip-title" tabindex="0" data-tip="Cómo cambió el precio de un piloto o escudería ronda a ronda. Se llena desde prices/2026.csv; si no hay precios cargados, la gráfica queda vacía.">Historial de precios</h2>
+    <p class="hint">Requiere llenar <code>prices/2026.csv</code>.</p>
+    <p class="empty" id="price-empty" hidden>Todavía no hay precios cargados.</p>
+    <select id="price-select"></select>
+    <div class="chart-box"><canvas id="price-chart"></canvas></div>
+  </section>
+</main>
+
+<footer class="foot"><p id="updated"></p></footer>
+
+<script>
+const D = window.F1_DATA;
+const PALETTE = ['#e10600', '#3671c6', '#27f4d2', '#ff8000', '#229971', '#0093cc', '#fe8ec1', '#ffd700', '#b6babd', '#6692ff'];
+// Cada piloto usa el tono oscuro o claro de su escudería.
+const DRIVER_COLOR = {
+  ANT: '#3DBE9A', RUS: '#3FD9C4',
+  LEC: '#B3000F', HAM: '#FF4D5E',
+  VER: '#1E3FD6', HAD: '#7D9BFF',
+  LAW: '#0D2A6B', LIN: '#6F8FD6',
+  NOR: '#E65C00', PIA: '#FFB347',
+  SAI: '#004AAD', ALB: '#5FA8FF',
+  GAS: '#B0215F', COL: '#FF9ACB',
+  OCO: '#4A4F57', BEA: '#9AA0A8',
+  HUL: '#7A1F3D', BOR: '#E8667F',
+  BOT: '#2B2B2B', PER: '#9AA3AE',
+  ALO: '#00594F', STR: '#006B61',
+};
+const TEAM_COLOR = {
+  mercedes: '#00A19C', ferrari: '#E8002D', red_bull: '#1E41FF', rb: '#4F6FD6',
+  mclaren: '#FF8000', williams: '#1868DB', alpine: '#FF87BC', haas: '#5C6370',
+  audi: '#8E1B3B', cadillac: '#6B7280', aston_martin: '#229971',
+};
+const $ = (id) => document.getElementById(id);
+const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+let cumChart = null, valueChart = null, priceChart = null;
+
+function chart(id, prev, cfg) {
+  if (prev) prev.destroy();
+  return new Chart($(id), cfg);
+}
+
+function table(head, rows) {
+  const isNum = (v) => typeof v === 'number' || /^(\$?[\d.+-]+M?%?|—)$/.test(String(v));
+  const th = head.map((h, i) => `<th class="${i > 0 ? 'num' : ''}">${h}</th>`).join('');
+  const body = rows.map((r) => `<tr>${r.map((v) => `<td class="${isNum(v) ? 'num' : ''}">${v}</td>`).join('')}</tr>`).join('');
+  return `<table><thead><tr>${th}</tr></thead><tbody>${body}</tbody></table>`;
+}
+
+const CAR_SLUG = { mercedes: 'mercedes', ferrari: 'ferrari', red_bull: 'redbullracing', mclaren: 'mclaren', alpine: 'alpine', aston_martin: 'astonmartin', williams: 'williams', haas: 'haasf1team', audi: 'audi', rb: 'racingbulls', cadillac: 'cadillac' };
+const thumb = (src) => `<img class="thumb" src="${src}" alt="" loading="lazy" onerror="this.remove()">`;
+const driverImg = (code) => thumb(`images/drivers/${code}.webp`);
+const driverPick = (code) => `<img class="thumb pick" data-code="${code}" src="images/drivers/${code}.webp" alt="" loading="lazy" onerror="this.remove()">`;
+
+let selectedDriver = null;
+
+// Pilotos no seleccionados se ven a 20 % de opacidad; sin selección, todo se ve igual.
+function applyHighlight() {
+  document.querySelectorAll('#flow [data-code]').forEach((el) => {
+    el.style.opacity = !selectedDriver || el.dataset.code === selectedDriver ? '1' : '0.2';
+  });
+  document.querySelectorAll('.pick').forEach((el) => el.classList.toggle('selected', el.dataset.code === selectedDriver));
+  document.querySelectorAll('.flow-lap').forEach((el) => { el.hidden = el.dataset.code !== selectedDriver; });
+  if (gainedChart) {
+    gainedChart.data.datasets[0].backgroundColor = gainedCodes.map((c) => (!selectedDriver || c === selectedDriver ? DRIVER_COLOR[c] : '#d9dce1'));
+    gainedChart.update();
+  }
+}
+
+// Oculta el degradado y el botón cuando el contenido cabe completo.
+function updateFold(wrap) {
+  wrap.querySelector('.flow-fade').hidden = wrap.scrollHeight <= wrap.clientHeight + 1;
+}
+const carImg = (id) => thumb(`images/cars/${CAR_SLUG[id] || id}.webp`);
+
+function heat(g) {
+  const a = Math.min(Math.abs(g) / 6, 1) * 0.85;
+  return g >= 0 ? `rgba(31, 157, 85, ${a})` : `rgba(214, 69, 69, ${a})`;
+}
+
+function latestPrices() {
+  const out = {};
+  D.prices.forEach((p) => {
+    const k = `${p.tipo}:${p.codigo}`;
+    if (!out[k] || p.round > out[k].round) out[k] = p;
+  });
+  return out;
+}
+
+function renderStandings() {
+  $('std-drivers').innerHTML = table(
+    ['#', 'Piloto', 'Equipo', 'Pts', 'Vic.'],
+    D.standings.drivers.map((d) => [d.position, `${driverPick(esc(d.code))}${esc(d.code)} · ${esc(d.name)}`, esc(d.team), d.points, d.wins])
+  );
+  $('std-constructors').innerHTML = table(
+    ['#', 'Constructor', 'Pts', 'Vic.'],
+    D.standings.constructors.map((c) => [c.position, `${carImg(c.id)}${esc(c.name)}`, c.points, c.wins])
+  );
+}
+
+// Versión simplificada: posiciones ganadas en promedio por piloto.
+let gainedChart = null;
+let gainedCodes = [];
+function renderGained() {
+  const rows = D.standings.drivers
+    .map((d) => ({ code: d.code, gained: driverMetrics(d.code).gained }))
+    .filter((r) => r.gained !== null)
+    .sort((a, b) => b.gained - a.gained);
+  gainedCodes = rows.map((r) => r.code);
+  gainedChart = chart('gained-chart', gainedChart, {
+    type: 'bar',
+    data: {
+      labels: gainedCodes,
+      datasets: [{ data: rows.map((r) => +r.gained.toFixed(2)), backgroundColor: gainedCodes.map((c) => DRIVER_COLOR[c] || '#999') }],
+    },
+    options: {
+      maintainAspectRatio: false,
+      indexAxis: 'y',
+      plugins: { legend: { display: false } },
+      scales: { x: { title: { display: true, text: 'Posiciones ganadas en promedio' } } },
+    },
+  });
+}
+
+// Panel de pista: trazado y datos de la carrera de la ronda seleccionada.
+function renderTrack(round) {
+  const r = D.rounds.find((x) => x.round === round);
+  const preview = (D.track_preview || {})[String(round)];
+  const t = (r && r.track) || preview;
+  if (!t) {
+    $('track').innerHTML = '<p class="hint">Sin datos de la carrera todavía.</p>';
+    return;
+  }
+  const note = r && r.track ? '' : '<p class="hint">Trazado de la práctica más rápida. Datos de carrera pendientes.</p>';
+
+  let svg = '<p class="hint">Trazado no disponible para esta carrera.</p>';
+  if (t.path && t.path.length > 1) {
+    const xs = t.path.map((p) => p[0]);
+    const ys = t.path.map((p) => p[1]);
+    const minX = Math.min(...xs), maxX = Math.max(...xs), minY = Math.min(...ys), maxY = Math.max(...ys);
+    const W = 280, H = 200, pad = 10;
+    const scale = Math.min((W - 2 * pad) / ((maxX - minX) || 1), (H - 2 * pad) / ((maxY - minY) || 1));
+    const ox = (W - (maxX - minX) * scale) / 2;
+    const oy = (H - (maxY - minY) * scale) / 2;
+    const d = t.path
+      .map((p, i) => `${i ? 'L' : 'M'}${(ox + (p[0] - minX) * scale).toFixed(1)} ${(oy + (maxY - p[1]) * scale).toFixed(1)}`)
+      .join(' ') + ' Z';
+    svg = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Trazado de la pista"><path d="${d}"></path></svg>`;
+  }
+
+  const show = (v) => (v === null || v === undefined ? '—' : v);
+  $('track').innerHTML = `${svg}${note}
+    <dl>
+      <dt>Curvas (aprox.)</dt><dd>${show(t.corners)}</dd>
+      <dt>Zonas de aceleración (aprox.)</dt><dd>${show(t.accel)}</dd>
+      <dt>Banderas amarillas</dt><dd>${show(t.yellow)}</dd>
+      <dt>Incidentes reportados</dt><dd>${show(t.incidents)}</dd>
+      <dt>Safety car</dt><dd>${show(t.safety_cars)}</dd>
+    </dl>`;
+}
+
+function renderCumulative() {
+  const top = D.standings.drivers.slice(0, 8).map((d) => d.code);
+  const labels = D.rounds.map((r) => `R${r.round}`);
+  const datasets = top.map((code, i) => {
+    let acc = 0;
+    const data = D.rounds.map((r) => {
+      const e = r.entries.find((x) => x.code === code);
+      acc += e ? e.points + e.points_sprint : 0;
+      return acc;
+    });
+    const color = DRIVER_COLOR[code] || '#999';
+    return { label: code, data, borderColor: color, backgroundColor: color, tension: 0.25, pointRadius: 2 };
+  });
+  cumChart = chart('cum-chart', cumChart, { type: 'line', data: { labels, datasets }, options: { maintainAspectRatio: false, plugins: { legend: { position: 'bottom' } } } });
+}
+
+function renderValue() {
+  const prices = latestPrices();
+  const pts = [];
+  D.standings.drivers.forEach((d) => {
+    const p = prices[`piloto:${d.code}`];
+    if (p) pts.push({ label: `${d.code} · ${d.name}`, color: DRIVER_COLOR[d.code] || '#999', precio: p.precio, pts: d.points, img: `images/drivers/${d.code}.webp` });
+  });
+  D.standings.constructors.forEach((c) => {
+    const p = prices[`constructor:${c.id}`];
+    if (p) pts.push({ label: c.name, color: TEAM_COLOR[c.id] || '#999', precio: p.precio, pts: c.points, img: `images/cars/${CAR_SLUG[c.id] || c.id}.webp` });
+  });
+
+  valueChart = chart('value-chart', valueChart, {
+    type: 'scatter',
+    data: { datasets: [{ label: 'Pilotos y constructores', data: pts.map((p) => ({ x: p.precio, y: p.pts, label: p.label })), backgroundColor: pts.map((p) => p.color), pointRadius: 7, pointHoverRadius: 9 }] },
+    options: {
+      maintainAspectRatio: false,
+      scales: { x: { title: { display: true, text: 'Precio (US$ M)' } }, y: { title: { display: true, text: 'Puntos' } } },
+      plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c) => `${c.raw.label}: ${c.raw.y} pts · $${c.raw.x}M` } } },
+    },
+  });
+
+  const ranked = pts
+    .map((p) => ({ ...p, ppm: p.precio > 0 ? p.pts / p.precio : 0 }))
+    .sort((a, b) => b.ppm - a.ppm)
+    .slice(0, 10);
+  $('value-table').innerHTML = table(
+    ['Nombre', 'Precio', 'Pts', 'Pts por M$'],
+    ranked.map((p) => [`${thumb(p.img)}${esc(p.label)}`, `$${p.precio.toFixed(1)}M`, p.pts, p.ppm.toFixed(1)])
+  );
+}
+
+function drawPrice(key) {
+  const [tipo, codigo] = key.split(':');
+  const pts = D.prices.filter((p) => p.tipo === tipo && p.codigo === codigo).sort((a, b) => a.round - b.round);
+  priceChart = chart('price-chart', priceChart, {
+    type: 'line',
+    data: {
+      labels: pts.map((p) => `R${p.round}`),
+      datasets: [{ label: key, data: pts.map((p) => p.precio), borderColor: (tipo === 'piloto' ? DRIVER_COLOR : TEAM_COLOR)[codigo] || '#999', backgroundColor: (tipo === 'piloto' ? DRIVER_COLOR : TEAM_COLOR)[codigo] || '#999', tension: 0.25 }],
+    },
+    options: { maintainAspectRatio: false, scales: { y: { title: { display: true, text: 'US$ M' } } } },
+  });
+}
+
+function renderPriceHistory() {
+  const keys = [...new Set(D.prices.map((p) => `${p.tipo}:${p.codigo}`))].sort();
+  const sel = $('price-select');
+  if (!keys.length) {
+    $('price-empty').hidden = false;
+    sel.hidden = true;
+    return;
+  }
+  sel.innerHTML = keys.map((k) => `<option value="${esc(k)}">${esc(k.replace(':', ' · '))}</option>`).join('');
+  sel.onchange = () => drawPrice(sel.value);
+  drawPrice(keys[0]);
+}
+
+function weekendsWithData() {
+  const list = Object.keys(D.practice || {}).map(Number).sort((a, b) => a - b)
+    .map((r) => ({
+      round: r,
+      sessions: D.practice[String(r)].filter((s) => s.entries.length),
+      race: D.schedule.find((x) => x.round === r),
+    }))
+    .filter((w) => w.sessions.length);
+  // La siguiente carrera aparece vacía hasta que haya prácticas.
+  const last = Math.max(0, ...list.map((w) => w.round), ...D.rounds.map((r) => r.round));
+  const next = D.schedule.find((x) => x.round === last + 1);
+  if (next && !list.some((w) => w.round === next.round)) list.push({ round: next.round, sessions: [], race: next });
+  return list;
+}
+
+const fmtLap = (sec) => {
+  const m = Math.floor(sec / 60);
+  return `${m}:${(sec - m * 60).toFixed(3).padStart(6, '0')}`;
+};
+
+const SESSION_ORDER = { 'Practice 1': 1, 'Practice 2': 2, 'Practice 3': 3, 'Sprint Qualifying': 1.5, 'Sprint': 4, 'Qualifying': 5, 'Race': 6 };
+const SESSION_LABEL = { 'Practice 1': 'FP1', 'Practice 2': 'FP2', 'Practice 3': 'FP3', 'Sprint Qualifying': 'SQ', 'Sprint': 'Sprint', 'Qualifying': 'Q', 'Race': 'Carrera' };
+
+// Todas las sesiones del fin de semana en orden: prácticas, sprint qualifying, sprint, clasificación y carrera.
+function weekendTimeline(weekend) {
+  const list = weekend.sessions.map((s) => ({ name: s.name, entries: s.entries.map((e) => ({ code: e.code, pos: e.pos, lap: e.best })) }));
+  const round = D.rounds.find((r) => r.round === weekend.round);
+  if (round) {
+    if (round.sprint) {
+      list.push({ name: 'Sprint', entries: round.entries.filter((e) => e.sprint_pos).map((e) => ({ code: e.code, pos: e.sprint_pos, lap: e.sprint_lap })) });
+    }
+    list.push({ name: 'Qualifying', entries: round.entries.filter((e) => e.quali).map((e) => ({ code: e.code, pos: e.quali, lap: e.quali_lap })) });
+    list.push({ name: 'Race', entries: round.entries.map((e) => ({ code: e.code, pos: e.finish, lap: e.race_lap })) });
+  } else {
+    const q = (D.quali_preview || {})[String(weekend.round)];
+    if (q) list.push({ name: 'Qualifying', entries: q.entries.map((e) => ({ code: e.code, pos: e.pos, lap: e.best })) });
+  }
+  return list.sort((a, b) => SESSION_ORDER[a.name] - SESSION_ORDER[b.name]);
+}
+
+const FLOW_ROW = 44;   // alto de cada posición en px
+const FLOW_PHOTO = 36; // tamaño de la foto en px
+const FLOW_MAX = 440;  // alto máximo visible de la ficha en px
+
+// Pilotos que estuvieron en el top 5 de alguna práctica, ordenados por mejor vuelta.
+function flowDrivers(weekend) {
+  const best = {};
+  const inTop5 = new Set();
+  weekend.sessions.filter((s) => s.name.startsWith('Practice')).forEach((s) => s.entries.forEach((e) => {
+    if (best[e.code] === undefined || e.best < best[e.code]) best[e.code] = e.best;
+    if (e.pos <= 5) inTop5.add(e.code);
+  }));
+  return [...inTop5].sort((a, b) => best[a] - best[b]);
+}
+
+function renderPanel(weekend) {
+  if (!weekend.sessions.length) {
+    $('flow').innerHTML = '<p class="hint">Todavía no hay sesiones de este fin de semana. Los datos aparecen cuando corra FP1.</p>';
+    $('flow-wrap').classList.remove('expanded');
+    $('flow-fade').hidden = true;
+    return;
+  }
+  const sessions = weekendTimeline(weekend);
+  const n = sessions.length;
+  const codes = flowDrivers(weekend);
+  const posOf = (code, s) => {
+    const e = s.entries.find((x) => x.code === code);
+    return e ? e.pos : null;
+  };
+  // Cada fila es una posición: el alto del panel depende de la peor posición mostrada.
+  const maxPos = Math.max(...codes.flatMap((code) => sessions.map((s) => posOf(code, s) || 0)));
+  const height = FLOW_ROW * maxPos;
+  const xPct = (i) => (100 * (i + 0.5)) / n;  // columna de cada práctica en %
+  const xVB = (i) => (300 * (i + 0.5)) / n;   // la misma columna en el viewBox de 300 unidades
+  const yOf = (p) => (p - 0.5) * FLOW_ROW;
+
+  const heads = sessions.map((s, i) => `<span style="left:${xPct(i)}%">${SESSION_LABEL[s.name] || s.name}</span>`).join('');
+
+  // La foto se alinea con la primera posición del piloto en el fin de semana.
+  const photos = codes.map((code) => {
+    const first = sessions.map((s) => posOf(code, s)).find((p) => p !== null);
+    return `<div class="flow-photo pick" data-code="${code}" style="top:${yOf(first) - FLOW_PHOTO / 2}px;background:${DRIVER_COLOR[code] || '#999'}"><img src="images/drivers/${esc(code)}.webp" alt="" onerror="this.remove()"></div>`;
+  }).join('');
+
+  const paths = codes.map((code) => {
+    const pts = sessions.map((s, i) => {
+      const p = posOf(code, s);
+      return p ? { x: xVB(i), y: yOf(p) } : null;
+    });
+    let d = '';
+    for (let i = 0; i < pts.length - 1; i++) {
+      const a = pts[i], b = pts[i + 1];
+      if (!a || !b) continue;
+      const mx = (a.x + b.x) / 2;
+      d += `M${a.x} ${a.y} C${mx} ${a.y} ${mx} ${b.y} ${b.x} ${b.y} `;
+    }
+    return d ? `<path d="${d}" data-code="${code}" stroke="${DRIVER_COLOR[code] || '#999'}"></path>` : '';
+  }).join('');
+
+  const nodes = codes.flatMap((code) => sessions.map((s, i) => {
+    const p = posOf(code, s);
+    return p ? `<div class="flow-node" data-code="${code}" style="left:${xPct(i)}%;top:${yOf(p)}px;background:${DRIVER_COLOR[code] || '#999'}">${p}</div>` : '';
+  })).join('');
+
+  // Tiempo de vuelta encima de cada nodo; solo se muestra cuando el piloto está seleccionado.
+  const laps = codes.flatMap((code) => sessions.map((s, i) => {
+    const e = s.entries.find((x) => x.code === code);
+    return e && e.lap ? `<div class="flow-lap" data-code="${code}" hidden style="left:${xPct(i)}%;top:${yOf(e.pos)}px;color:${DRIVER_COLOR[code] || '#999'}">${fmtLap(e.lap)}</div>` : '';
+  })).join('');
+
+  $('flow').innerHTML = `
+    <div class="flow-photos" style="height:${height}px">${photos}</div>
+    <div class="flow-board">
+      <div class="flow-heads">${heads}</div>
+      <div class="flow-canvas" style="height:${height}px">
+        <svg viewBox="0 0 300 ${height}" preserveAspectRatio="none">${paths}</svg>
+        ${nodes}
+        ${laps}
+      </div>
+    </div>`;
+  $('flow-wrap').classList.remove('expanded');
+  $('flow-fade').hidden = 30 + height <= FLOW_MAX;
+  applyHighlight();
+}
+
+// La experiencia está pensada para escritorio: avisa si la pantalla es más angosta.
+function checkViewport() {
+  $('desk-alert').hidden = window.innerWidth >= 1200;
+}
+
+// Carreras de un piloto: DNS no cuenta como carrera; DNF es cualquier abandono.
+const isClassified = (s) => s === 'Finished' || s === 'Lapped' || s.startsWith('+');
+function driverRecord(code) {
+  let races = 0, dnf = 0, dns = 0;
+  D.rounds.forEach((r) => r.entries.filter((e) => e.code === code).forEach((e) => {
+    if (e.status === 'Did not start') { dns++; return; }
+    races++;
+    if (!isClassified(e.status)) dnf++;
+  }));
+  return { races, dnf, dns };
+}
+
+// Diferencia en % entre la mejor vuelta del piloto y la más rápida de ese fin de semana.
+function practiceGap(round, code) {
+  const sessions = (D.practice[String(round)] || []).filter((s) => s.name.startsWith('Practice') && s.entries.length);
+  const best = {};
+  sessions.forEach((s) => s.entries.forEach((e) => {
+    if (best[e.code] === undefined || e.best < best[e.code]) best[e.code] = e.best;
+  }));
+  if (best[code] === undefined) return null;
+  return (best[code] / Math.min(...Object.values(best)) - 1) * 100;
+}
+
+// Fin de semana en curso: ronda con prácticas pero sin resultados de carrera todavía.
+function upcomingRound() {
+  const done = new Set(D.rounds.map((r) => r.round));
+  const open = Object.keys(D.practice)
+    .map(Number)
+    .filter((r) => !done.has(r) && D.practice[String(r)].some((s) => s.entries.length));
+  return open.length ? Math.max(...open) : null;
+}
+
+// Peso de las prácticas del fin de semana en curso frente al promedio de la temporada.
+const CURRENT_PRACTICE_WEIGHT = 0.5;
+
+// Vida media del peso por recencia: una carrera de hace 3 rondas pesa la mitad que la última.
+// Cada carrera pesa menos que la siguiente, pero todas cuentan.
+const RECENCY_HALF_LIFE = 3;
+
+function driverMetrics(code) {
+  const avg = (xs) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null);
+  const wavg = (pairs) => {
+    const total = pairs.reduce((a, [, w]) => a + w, 0);
+    return total ? pairs.reduce((a, [v, w]) => a + v * w, 0) / total : null;
+  };
+  const last = Math.max(...D.rounds.map((r) => r.round));
+  const wt = (round) => Math.pow(0.5, (last - round) / RECENCY_HALF_LIFE);
+
+  const entries = D.rounds.flatMap((r) => r.entries.filter((e) => e.code === code).map((e) => ({ ...e, round: r.round })));
+  const raced = entries.filter((e) => e.status !== 'Did not start');
+
+  // Ritmo en práctica: temporada con peso por recencia, mezclada con las prácticas del fin de semana en curso.
+  const season = wavg(D.rounds.map((r) => [practiceGap(r.round, code), wt(r.round)]).filter(([g]) => g !== null));
+  const now = upcomingRound();
+  const current = now === null ? null : practiceGap(now, code);
+  const w = CURRENT_PRACTICE_WEIGHT;
+  const gap = season === null ? current : current === null ? season : (1 - w) * season + w * current;
+
+  const raceWeight = raced.reduce((a, e) => a + wt(e.round), 0);
+  const dnfWeight = raced.filter((e) => !isClassified(e.status)).reduce((a, e) => a + wt(e.round), 0);
+  return {
+    quali: avg(entries.filter((e) => e.quali).map((e) => e.quali)),
+    finish: wavg(raced.map((e) => [e.finish, wt(e.round)])),
+    gained: avg(entries.filter((e) => e.gained !== null).map((e) => e.gained)),
+    gap,
+    rel: raceWeight ? 1 - dnfWeight / raceWeight : null,
+  };
+}
+
+const RADAR_KEYS = ['finish', 'gap', 'rel'];
+const RADAR_LABELS = ['Ritmo en práctica', 'Resultado en carrera', 'Fiabilidad'];
+
+const clamp = (x, lo, hi) => Math.min(hi, Math.max(lo, x));
+
+// Cada eje va de 0 a 10; más alto es mejor. Si falta un dato, se usa el promedio de la parrilla.
+function radarScores(m, field) {
+  const gap = m.gap === null ? field.gap : m.gap;
+  const finish = m.finish === null ? field.finish : m.finish;
+  const rel = m.rel === null ? field.rel : m.rel;
+  return [
+    gap === null ? 0 : 10 * clamp(1 - gap / 3, 0, 1),
+    finish === null ? 0 : 10 * clamp((20 - finish) / 19, 0, 1),
+    rel === null ? 0 : 10 * clamp(rel, 0, 1),
+  ];
+}
+
+// Probabilidad de ganar: cada piloto pesa según sus tres ejes; el total suma 100 %.
+const P1_WEIGHTS = [0.45, 0.4, 0.15];
+const P1_SHARPNESS = 6;
+function p1Probabilities() {
+  const field = fieldAverage();
+  const codes = D.standings.drivers.map((d) => d.code);
+  const weights = codes.map((c) => {
+    const s = radarScores(driverMetrics(c), field);
+    return Math.exp(P1_SHARPNESS * P1_WEIGHTS.reduce((acc, w, i) => acc + (w * s[i]) / 10, 0));
+  });
+  const total = weights.reduce((a, b) => a + b, 0);
+  return Object.fromEntries(codes.map((c, i) => [c, weights[i] / total]));
+}
+
+function fieldAverage() {
+  const all = D.standings.drivers.map((d) => driverMetrics(d.code));
+  const avg = {};
+  RADAR_KEYS.forEach((k) => {
+    const xs = all.map((m) => m[k]).filter((v) => v !== null);
+    avg[k] = xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : null;
+  });
+  return avg;
+}
+
+let radarChart = null;
+function renderSheet() {
+  const code = selectedDriver || D.standings.drivers[0].code;
+  const info = D.standings.drivers.find((d) => d.code === code);
+  if (!info) return;
+
+  const entries = D.rounds.flatMap((r) => r.entries.filter((e) => e.code === code));
+  const teamId = entries.length ? entries[entries.length - 1].teamId : null;
+  const price = latestPrices()[`piloto:${code}`];
+  const rec = driverRecord(code);
+  const up = (D.upgrades || []).find((u) => u.round === currentRound && u.equipo === teamId);
+  const probs = p1Probabilities();
+  const rank = Object.values(probs).filter((v) => v > probs[code]).length + 1;
+  const color = DRIVER_COLOR[code] || '#999';
+
+  $('sheet-photo').style.background = color;
+  $('sheet-photo').innerHTML = `<img src="images/drivers/${esc(code)}.webp" alt="" onerror="this.remove()">`;
+  $('sheet-text').innerHTML = `
+    <h3 class="tip-title" tabindex="0" data-tip="Ficha del piloto. Precio y campeonato: su posición actual. Prob. de ganar: probabilidad estimada de ganar la próxima carrera, según ritmo en práctica, resultado y fiabilidad; suma 100 % entre pilotos. DNF: carreras que no terminó. DNS: carreras a las que no salió. Carro: mejoras de la escudería en la ronda, abandonos del equipo, fallas y choques. Radar: más área, más probabilidad de ganar.">${esc(info.name)}</h3>
+    <div class="sheet-team">${esc(info.team)}</div>
+    <dl>
+      <dt>Precio</dt><dd>${price ? `$${price.precio.toFixed(1)}M` : '—'}</dd>
+      <dt>Campeonato</dt><dd>P${info.position}</dd>
+      <dt class="tip" tabindex="0" data-tip="Probabilidad estimada de terminar la carrera en primera posición, según ritmo en práctica, resultado en carrera y fiabilidad. Suma 100 % entre todos los pilotos.">Prob. de ganar</dt><dd>${(probs[code] * 100).toFixed(1)}% · #${rank}</dd>
+      <dt class="tip" tabindex="0" data-tip="DNF (Did Not Finish): el piloto no terminó la carrera por abandono, accidente o avería.">DNF</dt><dd>${rec.dnf}</dd>
+      <dt class="tip" tabindex="0" data-tip="DNS (Did Not Start): el piloto no tomó la salida de la carrera.">DNS</dt><dd>${rec.dns}</dd>
+    </dl>`;
+  const roundObj = D.rounds.find((r) => r.round === currentRound);
+  const teamEntries = roundObj && teamId ? roundObj.entries.filter((e) => e.teamId === teamId) : null;
+  const abandonos = teamEntries ? teamEntries.filter((e) => e.status !== 'Did not start' && !isClassified(e.status)).length : null;
+  const show = (v) => (v === null || v === undefined ? '—' : v);
+  $('sheet-car').innerHTML = teamId ? `
+    <div class="car-img"><img src="images/cars/${esc(CAR_SLUG[teamId] || teamId)}.webp" alt="" onerror="this.remove()"></div>
+    <dl>
+      <dt>Mejoras</dt><dd>${show(up ? up.mejoras : null)}</dd>
+      <dt>Abandonos</dt><dd>${show(abandonos)}</dd>
+      <dt>Fallas</dt><dd>${show(up ? up.fallas : null)}</dd>
+      <dt>Choques</dt><dd>${show(up ? up.choques : null)}</dd>
+    </dl>` : '';
+
+  const field = fieldAverage();
+  radarChart = chart('radar-chart', radarChart, {
+    type: 'radar',
+    data: {
+      labels: RADAR_LABELS,
+      datasets: [
+        { label: code, data: radarScores(driverMetrics(code), field), borderColor: color, backgroundColor: `${color}33`, pointRadius: 3 },
+        { label: 'Promedio de la parrilla', data: radarScores(field, field), borderColor: '#9aa0a9', borderDash: [4, 4], backgroundColor: 'transparent', pointRadius: 0 },
+      ],
+    },
+    options: {
+      maintainAspectRatio: false,
+      scales: {
+        r: { min: 0, max: 10, ticks: { display: false }, grid: { color: '#e3e0da' }, angleLines: { color: '#e3e0da' }, pointLabels: { font: { size: 11 } } },
+      },
+      plugins: { legend: { position: 'bottom' } },
+    },
+  });
+}
+
+// Preguntas de la sesión de predicciones del fin de semana. Las de EE. UU. (R18) quedaron en data/historial.js.
+// Para el próximo fin de semana, pega aquí las preguntas nuevas (tipos: podium, pick-driver, pick-team, duel, radio, list, slider, yesno).
+const PREDICT = [];
+
+// Respuestas registradas antes de la clasificación. Vacío hasta que haya preguntas nuevas.
+const PREDICT_LOCKED = { chip: null };
+const PREDICT_ROUND = 19;
+
+// Aciertos de las preguntas de clasificación, contra el resultado de OpenF1 o de Jolpica.
+function qualiResults() {
+  if (!PREDICT.length) return null;
+  const round = D.rounds.find((r) => r.round === PREDICT_ROUND);
+  const raw = round ? round.entries.filter((e) => e.quali).map((e) => ({ code: e.code, team: e.team, pos: e.quali, reached: null }))
+    : ((D.quali_preview || {})[String(PREDICT_ROUND)] || { entries: [] }).entries;
+  if (!raw.length) return null;
+  const pos = Object.fromEntries(raw.map((e) => [e.code, e.pos]));
+  const L = PREDICT_LOCKED;
+  const out = {};
+
+  const pole = raw.find((e) => e.pos === 1).code;
+  out[1] = { hit: L[1] === pole, pts: null, text: `Pole: ${driverName(pole)}. Elegiste a ${driverName(L[1])}, que salió ${pos[L[1]]}º.` };
+
+  const duel = PREDICT[2].options;
+  const best = pos[duel[0].code] < pos[duel[1].code] ? 0 : 1;
+  const ahead = duel[best].code;
+  out[2] = { hit: L[2] === best, pts: L[2] === best ? duel[best].pts : 0, text: `${driverName(duel[0].code)} ${pos[duel[0].code]}º, ${driverName(duel[1].code)} ${pos[duel[1].code]}º. Salió mejor ${driverName(ahead)}.` };
+
+  const alpine = raw.filter((e) => e.team === 'Alpine');
+  const phase = (e) => (e.reached ? Number(e.reached[1]) : (e.pos <= 10 ? 3 : e.pos <= 16 ? 2 : 1));
+  const far = Math.max(...alpine.map(phase));
+  const opt = 3 - far; // Q3 es la opción 0, Q2 la 1, Q1 la 2
+  out[3] = { hit: L[3] === opt, pts: L[3] === opt ? PREDICT[3].options[opt].pts : 0, text: `Alpine llegó hasta Q${far}: ${alpine.map((e) => `${driverName(e.code)} ${e.pos}º`).join(', ')}.` };
+  return { out, pos, pole };
+}
+
+// Qué tan bien ordenó el modelo la parrilla con el ritmo de práctica (antes de la clasificación).
+function qualiModelCheck(pos) {
+  const field = fieldAverage();
+  const codes = Object.keys(pos);
+  const pace = Object.fromEntries(codes.map((c) => [c, radarScores(driverMetrics(c), field)[0]]));
+  const order = [...codes].sort((a, b) => pace[b] - pace[a]);
+  const n = codes.length;
+  const d2 = order.reduce((a, c, i) => a + Math.pow(i + 1 - pos[c], 2), 0);
+  const rho = 1 - (6 * d2) / (n * (n * n - 1));
+  const top10 = order.slice(0, 10).filter((c) => pos[c] <= 10).length;
+  const top3 = order.slice(0, 3).filter((c) => pos[c] <= 3).length;
+  return { rho, top10, top3, order: order.slice(0, 3) };
+}
+
+// Cambiar el sufijo descarta lo guardado antes y vuelve a usar las respuestas registradas.
+const PREDICT_KEY = 'f1-predicciones-2026-r19-v1';
+let predictPicks = null;
+
+const driverName = (code) => {
+  const d = D.standings.drivers.find((x) => x.code === code);
+  if (!d) return code;
+  const parts = d.name.split(' ');
+  return `${parts[0][0]}. ${parts[parts.length - 1].toUpperCase()}`;
+};
+
+// Sugerencias calculadas desde las métricas. Se pueden cambiar en la página.
+// Un segundo piloto del mismo equipo pesa 70 % en el podio: dos compañeros juntos pasan, pero rara vez.
+const TEAMMATE_PENALTY = 0.7;
+
+// Calcula respuestas desde las métricas; se usa para armar las del próximo fin de semana.
+function suggestPredict() {
+  const probs = p1Probabilities();
+  const ranked = Object.keys(probs).sort((x, y) => probs[y] - probs[x]);
+  const field = fieldAverage();
+  const metrics = Object.fromEntries(D.standings.drivers.map((d) => [d.code, driverMetrics(d.code)]));
+  const strength = driverStrengths();
+  const argmax = (codes, f) => codes.reduce((best, c) => (f(c) > f(best) ? c : best));
+
+  // Vuelta rápida: promedio de la vuelta del piloto frente a la más rápida de cada carrera.
+  const lapRatio = {};
+  D.rounds.forEach((r) => {
+    const laps = r.entries.filter((e) => e.race_lap);
+    if (!laps.length) return;
+    const fastest = Math.min(...laps.map((e) => e.race_lap));
+    laps.forEach((e) => { (lapRatio[e.code] = lapRatio[e.code] || []).push(e.race_lap / fastest); });
+  });
+  const lapScore = (c) => (lapRatio[c] ? -lapRatio[c].reduce((a, b) => a + b, 0) / lapRatio[c].length : -Infinity);
+
+  const teamOf = {};
+  D.rounds.forEach((r) => r.entries.forEach((e) => { teamOf[e.code] = e.teamId; }));
+  const podium = [];
+  while (podium.length < 3) {
+    const adjusted = (c) => probs[c] * (podium.some((x) => teamOf[x] === teamOf[c]) ? TEAMMATE_PENALTY : 1);
+    podium.push(ranked.filter((c) => !podium.includes(c)).reduce((best, c) => (adjusted(c) > adjusted(best) ? c : best)));
+  }
+
+  const q3Opts = ['LEC', 'HAM'];
+  const q7Opts = ['LAW', 'GAS', 'SAI', 'ALO'];
+  const stable = ['OCO', 'BEA', 'PER', 'BOT'];
+  const pace = (c) => radarScores(metrics[c], field)[0];
+  const norrisFinish = metrics.NOR ? metrics.NOR.finish : null;
+  const classified = Math.round(stable.reduce((a, c) => a + (metrics[c] && metrics[c].rel !== null ? metrics[c].rel : 0), 0));
+
+  return {
+    0: { '1st': podium[0], '2nd': podium[1], '3rd': podium[2] },
+    1: argmax(Object.keys(metrics), pace),
+    2: q3Opts.indexOf(argmax(q3Opts, (c) => strength[c])),
+    3: 0, // Alpine en Q3 en todas las carreras desde Monza: se mantiene la racha
+    4: argmax(Object.keys(metrics), lapScore),
+    5: null, // sin datos de paradas: lo eliges tú
+    6: q7Opts.indexOf(argmax(q7Opts, (c) => strength[c])),
+    7: Math.min(4, Math.max(0, classified)),
+    8: norrisFinish === null ? 2 : norrisFinish <= 3 ? 0 : norrisFinish <= 10 ? 1 : 2,
+    9: probs.ANT > 0.3 ? 0 : 1,
+    chip: null,
+  };
+}
+
+function loadPredict() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(PREDICT_KEY));
+    if (saved) return saved;
+  } catch (e) { /* sin almacenamiento: se usan las sugerencias */ }
+  return structuredClone(PREDICT_LOCKED);
+}
+
+function savePredict() {
+  try { localStorage.setItem(PREDICT_KEY, JSON.stringify(predictPicks)); } catch (e) { /* sin almacenamiento */ }
+}
+
+// Ranura con foto y lista para elegir piloto o escudería.
+function pickBox(kind, value, i, place, wide) {
+  const isTeam = kind === 'team';
+  const options = isTeam
+    ? D.standings.constructors.map((c) => [c.id, c.name])
+    : D.standings.drivers.map((d) => [d.code, driverName(d.code)]);
+  const color = value ? (isTeam ? TEAM_COLOR[value] : DRIVER_COLOR[value]) || '#f7f8fa' : '#f7f8fa';
+  const img = !value ? '<span class="pick-empty">+</span>'
+    : isTeam ? `<img src="images/cars/${esc(CAR_SLUG[value] || value)}.webp" alt="" onerror="this.remove()">`
+    : `<img src="images/drivers/${esc(value)}.webp" alt="" onerror="this.remove()">`;
+  return `<div class="pick-box${wide ? ' wide' : ''}">
+    <div class="pick-slot" style="background:${color}">${img}</div>
+    <select data-pick="${kind}" data-q="${i}"${place ? ` data-place="${place}"` : ''} aria-label="Elegir">
+      <option value="">Elegir…</option>
+      ${options.map(([v, t]) => `<option value="${esc(v)}"${v === value ? ' selected' : ''}>${esc(t)}</option>`).join('')}
+    </select>
+  </div>`;
+}
+
+function predictAnswer(q, i) {
+  const picked = predictPicks[i];
+  switch (q.type) {
+    case 'podium': {
+      const p = picked || {};
+      return `<div class="podium">
+        <div class="place second">${pickBox('driver', p['2nd'], i, '2nd')}2º</div>
+        <div class="place first">${pickBox('driver', p['1st'], i, '1st')}1º</div>
+        <div class="place third">${pickBox('driver', p['3rd'], i, '3rd')}3º</div>
+      </div>`;
+    }
+    case 'pick-driver':
+      return pickBox('driver', picked, i, null, true);
+    case 'pick-team':
+      return pickBox('team', picked, i, null, true);
+    case 'duel':
+      return `<div class="duel">${q.options.map((o, k) => `
+        <button type="button" class="duel-card${picked === k ? ' on' : ''}" data-q="${i}" data-k="${k}">
+          <div class="head" style="background:${DRIVER_COLOR[o.code] || '#999'}"><img src="images/drivers/${esc(o.code)}.webp" alt="" onerror="this.remove()"></div>
+          <div class="body">${esc(driverName(o.code))}<br><span class="pts">${o.pts} pts.</span></div>
+        </button>${k === 0 ? '<span class="vs">VS</span>' : ''}`).join('')}</div>`;
+    case 'radio':
+      return q.options.map((o, k) => `
+        <button type="button" class="opt${picked === k ? ' on' : ''}" data-q="${i}" data-k="${k}">
+          <span class="radio"></span>${esc(o.label)} <span class="pts">${o.pts} pts.</span>
+        </button>`).join('');
+    case 'list':
+      return q.options.map((o, k) => `
+        <button type="button" class="list-row${picked === k ? ' on' : ''}" data-q="${i}" data-k="${k}">
+          <span class="radio"></span>
+          <img src="images/drivers/${esc(o.code)}.webp" alt="" onerror="this.remove()">
+          <span class="name">${esc(driverName(o.code))}</span>
+          <span class="pts">${o.pts} pts.</span>
+        </button>`).join('');
+    case 'slider': {
+      const v = picked ?? 0;
+      return `<div class="slider-box">
+        <div class="value" data-value>${v}</div>
+        <input type="range" min="0" max="${q.max}" value="${v}" data-slider="${i}" aria-label="Número de autos clasificados">
+        <div class="scale"><span>0</span><span>${q.max}</span></div>
+      </div>`;
+    }
+    case 'yesno':
+      return `<div class="yesno">${q.options.map((o, k) => `
+        <button type="button" class="opt${picked === k ? ' on' : ''}" data-q="${i}" data-k="${k}">
+          ${esc(o.label)}<span class="pts">${o.pts} pts.</span>
+        </button>`).join('')}</div>`;
+    default:
+      return '';
+  }
+}
+
+function renderPredict() {
+  const qr = qualiResults();
+  const verdict = (i) => {
+    const r = qr && qr.out[i];
+    if (!r) return '';
+    const color = r.hit ? '#1e9e72' : '#b3261e';
+    return `<p class="verdict" style="color:${color};font-weight:600">${r.hit ? '✓ Acierto' : '✗ Fallo'}${r.pts !== null ? ` · ${r.pts} pts.` : ''}<span style="color:var(--muted);font-weight:400"> ${esc(r.text)}</span></p>`;
+  };
+  let summary = '';
+  if (qr) {
+    const hits = Object.values(qr.out).filter((r) => r.hit).length;
+    const pts = Object.values(qr.out).reduce((a, r) => a + (r.pts || 0), 0);
+    const m = qualiModelCheck(qr.pos);
+    summary = `<p class="pred-summary"><strong>Clasificación: ${hits} de ${Object.keys(qr.out).length} aciertos</strong> · ${pts} pts. de las preguntas con puntaje.<br>
+      <span style="color:var(--muted)">Ritmo de práctica del modelo contra la parrilla real: ${m.top3} de 3 en el top 3, ${m.top10} de 10 en el top 10, correlación de orden ${m.rho.toFixed(2)} (1 sería idéntico). Su top 3 fue ${m.order.map(driverName).join(', ')}.</span></p>`;
+  }
+  $('pred-summary').innerHTML = summary;
+  if (!PREDICT.length) {
+    $('pred-list').innerHTML = '<p class="hint">Todavía no hay preguntas para el Gran Premio de México. Se publican con el fin de semana; el resultado de EE. UU. está en el historial.</p>';
+    return;
+  }
+  $('pred-list').innerHTML = PREDICT.map((q, i) => `
+    <div class="pred-row">
+      <div class="pred-q">
+        <span class="num">Q${i + 1}</span>
+        <h3>${esc(q.title)}</h3>
+        <p>${esc(q.sub)}</p>
+        ${verdict(i)}
+        <button type="button" class="chip-btn${predictPicks.chip === i ? ' on' : ''}" data-chip="${i}">${predictPicks.chip === i ? 'Chip 2x aplicado' : 'Aplicar chip 2x'}</button>
+      </div>
+      <div class="pred-a">${predictAnswer(q, i)}</div>
+    </div>`).join('');
+}
+
+function renderHistorial() {
+  const H = typeof HISTORIAL === 'undefined' ? [] : HISTORIAL;
+  if (!H.length) { $('historial').innerHTML = '<p class="hint">Sin historial todavía.</p>'; return; }
+  $('historial').innerHTML = H.slice().reverse().map((r) => {
+    const graded = r.preguntas.filter((q) => q.acierto !== null);
+    const hits = graded.reduce((a, q) => a + q.acierto, 0);
+    const pts = r.preguntas.reduce((a, q) => a + (q.puntos || 0), 0);
+    const rows = r.preguntas.map((q) => {
+      const mark = q.acierto === null ? '–' : q.acierto === 1 ? '✓' : q.acierto === 0 ? '✗' : '◐';
+      const color = q.acierto === 1 ? '#1e9e72' : q.acierto === 0 ? '#b3261e' : q.acierto === null ? 'var(--muted)' : '#b7791f';
+      return `<tr><td>Q${q.pregunta}</td><td>${esc(q.titulo)}</td><td>${esc(q.respuesta)}</td><td>${esc(q.real)}</td><td style="color:${color};font-weight:700;text-align:center">${mark}</td><td>${q.puntos === null ? '' : q.puntos}</td><td style="color:var(--muted)">${esc(q.nota || '')}</td></tr>`;
+    }).join('');
+    return `<h3>R${r.ronda} · ${esc(r.gp)}</h3>
+      <p class="pred-summary"><strong>${hits} de ${graded.length} aciertos</strong> (parcial cuenta ½) · ${pts} pts. de las preguntas con puntaje${r.chip === null ? ' · sin chip 2x' : ''}.<br>
+      <span style="color:var(--muted)">Modelo en la quali: ${r.top3_quali} de 3 en el top 3, ${r.top10_quali} de 10 en el top 10, correlación ${Number(r.rho_quali).toFixed(2)}.</span></p>
+      <div style="overflow-x:auto"><table class="hist"><thead><tr><th></th><th>Pregunta</th><th>Tu respuesta</th><th>Resultado real</th><th></th><th>Pts.</th><th>Nota</th></tr></thead><tbody>${rows}</tbody></table></div>`;
+  }).join('');
+}
+
+function render() {
+  $('updated').textContent = `Actualizado: ${D.generated} · ${D.rounds.length} rondas con resultados`;
+  renderStandings();
+  updateFold($('std-wrap'));
+  renderGained();
+  renderCumulative();
+  renderValue();
+  renderPriceHistory();
+  renderWeekendPicker();
+  renderSheet();
+  renderTeam();
+  renderPredict();
+  renderHistorial();
+}
+
+// Equipos de F1 Fantasy (T1). Se editan aquí cuando cambie la configuración.
+// used y locked: chips usados o bloqueados; el resto está disponible.
+const TEAMS = {
+  richard: {
+    owner: 'Richard',
+    name: 'Grupo Principal',
+    drivers: ['ANT', 'HAM', 'HAD', 'GAS', 'ALO'],
+    boost: 'ANT',
+    constructors: ['rb', 'aston_martin'],
+    capLeft: 0.7, // dinero disponible en US$ M, según el Cost Cap
+    freeLeft: 0, // transferencias gratis que quedan esta jornada: ya se usaron las 2 en la configuración sugerida
+    used: ['Auto Pilot', 'No Negative', 'x3 Boost'],
+    locked: ['Final Fix'],
+  },
+  mayra: {
+    owner: 'Mayra',
+    name: 'Arya F1 team',
+    drivers: ['ANT', 'VER', 'LEC', 'LAW', 'HUL'],
+    boost: 'ANT',
+    constructors: ['rb', 'aston_martin'],
+    capLeft: 2.8,
+    freeLeft: 0,
+    used: ['Final Fix', 'Auto Pilot'],
+    locked: [],
+  },
+};
+let view = { owner: 'richard', mode: 'actual' };
+// Puntos que se descuentan por cada transferencia extra. Verificar el valor en las reglas de la temporada.
+const EXTRA_TRANSFER_PENALTY = 10;
+const suggestions = {};
+
+const CHIP_DEFS = [
+  { name: 'Limitless', color: '#1e5fd1', bg: '#d6e2f5', icon: '<path d="M12 12c-2-2.5-4.5-4-6.5-4a4 4 0 0 0 0 8c2 0 4.5-1.5 6.5-4zm0 0c2 2.5 4.5 4 6.5 4a4 4 0 0 0 0-8c-2 0-4.5 1.5-6.5 4z"/>' },
+  { name: 'Wildcard', color: '#b3261e', bg: '#f1d6d6', icon: '<path d="M8 19V5m0 0-3 3m3-3 3 3M16 5v14m0 0-3-3m3 3 3-3"/>' },
+  { name: 'Final Fix', color: '#e0821c', bg: '#f8e6d0', icon: '<circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/>' },
+  { name: 'Auto Pilot', color: '#1e9e72', bg: '#d9f0e7', icon: '<circle cx="12" cy="12" r="1.8"/><path d="M8.5 8.5a5 5 0 0 0 0 7M15.5 8.5a5 5 0 0 1 0 7M5.8 5.8a9 9 0 0 0 0 12.4M18.2 5.8a9 9 0 0 1 0 12.4"/>' },
+  { name: 'No Negative', color: '#8d55d6', bg: '#ece2f8', icon: '<path d="M4 16l5-5 4 3 7-7M15 7h5v5"/>' },
+  { name: 'x3 Boost', color: '#6aa82a', bg: '#e8f2d6', icon: '<text x="12" y="16.5" text-anchor="middle" font-size="11" font-weight="700" fill="currentColor" stroke="none">3×</text>' },
+];
+
+function renderChips(team) {
+  $('chips').innerHTML = CHIP_DEFS.map((c) => {
+    const used = team.used.includes(c.name);
+    const locked = team.locked.includes(c.name);
+    const status = used ? 'usado' : locked ? 'bloqueado' : 'disponible';
+    const lock = locked ? '<svg class="lock" viewBox="0 0 24 24"><rect x="5" y="11" width="14" height="9" rx="2"/><path d="M8 11V8a4 4 0 0 1 8 0v3"/></svg>' : '';
+    return `<span class="chip tip${used ? ' used' : ''}" tabindex="0" data-tip="${esc(c.name)} · ${status}" style="background:${c.bg};color:${c.color}">
+      <svg class="icon" viewBox="0 0 24 24" aria-hidden="true">${c.icon}</svg>${lock}
+    </span>`;
+  }).join('');
+}
+
+const priceOf = (tipo, codigo) => {
+  const p = latestPrices()[`${tipo}:${codigo}`];
+  return p ? p.precio : 0;
+};
+
+function combinations(items, k) {
+  if (k === 0) return [[]];
+  if (items.length < k) return [];
+  const [first, ...rest] = items;
+  return [...combinations(rest, k - 1).map((c) => [first, ...c]), ...combinations(rest, k)];
+}
+
+// Fuerza estimada de cada piloto (0 a 1): la misma mezcla de ejes que la probabilidad de ganar.
+function driverStrengths() {
+  const field = fieldAverage();
+  return Object.fromEntries(D.standings.drivers.map((d) => {
+    const s = radarScores(driverMetrics(d.code), field);
+    return [d.code, P1_WEIGHTS.reduce((acc, w, i) => acc + (w * s[i]) / 10, 0)];
+  }));
+}
+
+// Fuerza de cada escudería: promedio de sus dos pilotos.
+function constructorStrengths(S) {
+  const teamOf = {};
+  D.rounds.forEach((r) => r.entries.forEach((e) => { teamOf[e.code] = e.teamId; }));
+  const groups = {};
+  Object.keys(S).forEach((c) => {
+    const t = teamOf[c];
+    if (t) (groups[t] = groups[t] || []).push(S[c]);
+  });
+  return Object.fromEntries(Object.entries(groups).map(([t, xs]) => [t, xs.reduce((a, b) => a + b, 0) / xs.length]));
+}
+
+// Equipo sugerido: mayor fuerza estimada dentro del presupuesto y con a lo más maxChanges cambios
+// respecto al equipo actual. Un piloto lleva 2x. Solo entran pilotos y escuderías con precio cargado.
+function suggestTeam(budget, team, maxChanges) {
+  const S = driverStrengths();
+  const T = constructorStrengths(S);
+  const P = latestPrices();
+  const cost = (tipo, c) => (P[`${tipo}:${c}`] ? P[`${tipo}:${c}`].precio : 0);
+
+  const drivers = Object.keys(S).filter((c) => cost('piloto', c) > 0);
+  const teamPairs = combinations(Object.keys(T).filter((c) => cost('constructor', c) > 0), 2).map((ts) => ({
+    ts,
+    cost: ts.reduce((a, c) => a + cost('constructor', c), 0),
+    score: ts.reduce((a, c) => a + T[c], 0),
+    changes: ts.filter((c) => !team.constructors.includes(c)).length,
+  }));
+
+  let best = null;
+  combinations(drivers, 5).forEach((ds) => {
+    const dCost = ds.reduce((a, c) => a + cost('piloto', c), 0);
+    if (dCost > budget) return;
+    const dChanges = ds.filter((c) => !team.drivers.includes(c)).length;
+    const boost = ds.reduce((top, c) => (S[c] > S[top] ? c : top), ds[0]);
+    const dScore = ds.reduce((a, c) => a + S[c], 0) + S[boost];
+    for (const tp of teamPairs) {
+      if (dCost + tp.cost > budget) continue;
+      if (dChanges + tp.changes > maxChanges) continue;
+      const score = dScore + tp.score;
+      if (!best || score > best.score) best = { score, cost: dCost + tp.cost, drivers: ds, constructors: tp.ts, boost };
+    }
+  });
+  return best;
+}
+
+// Presupuesto = valor actual del equipo + dinero disponible.
+function teamBudget(team) {
+  const current = team.drivers.reduce((a, c) => a + priceOf('piloto', c), 0)
+    + team.constructors.reduce((a, c) => a + priceOf('constructor', c), 0);
+  return current + team.capLeft;
+}
+
+const money = (v) => `$${v.toFixed(1)}M`;
+
+// Cada pieza conserva su lugar: si un piloto o escudería sigue en el equipo, queda donde estaba;
+// la pieza nueva ocupa el lugar de la que sale.
+function slotsFor(team, sel) {
+  const place = (current, chosen) => {
+    const kept = chosen.filter((c) => current.includes(c));
+    const incoming = chosen.filter((c) => !current.includes(c));
+    let k = 0;
+    return current.map((c) => (kept.includes(c) ? c : incoming[k++]));
+  };
+  return {
+    drivers: place(team.drivers, sel.drivers),
+    constructors: place(team.constructors, sel.constructors),
+    boost: sel.boost,
+  };
+}
+
+function renderTeam() {
+  const team = TEAMS[view.owner];
+  const budget = teamBudget(team);
+  const S = driverStrengths();
+  const T = constructorStrengths(S);
+  const key = `${view.owner}:${view.mode}`;
+  if (view.mode !== 'actual' && !suggestions[key]) {
+    suggestions[key] = suggestTeam(budget, team, view.mode === 'sugerida' ? team.freeLeft : Infinity);
+  }
+
+  const sel = view.mode === 'actual'
+    ? { drivers: team.drivers, constructors: team.constructors, boost: team.boost }
+    : (suggestions[key] || { drivers: team.drivers, constructors: team.constructors, boost: team.boost });
+  const prices = latestPrices();
+  const deltaOf = (key) => {
+    const p = prices[key];
+    return p && p.delta ? `<span class="delta ${p.delta > 0 ? 'up' : 'down'}">${p.delta > 0 ? '▲' : '▼'} $${Math.abs(p.delta).toFixed(1)}M</span>` : '';
+  };
+
+  const driverSlot = (c) => {
+    const info = D.standings.drivers.find((d) => d.code === c);
+    const name = info ? info.name.split(' ') : [c];
+    const label = name.length > 1 ? `${name[0][0]}. ${name[name.length - 1].toUpperCase()}` : c;
+    const p = prices[`piloto:${c}`];
+    return `<article class="tslot">
+      <div class="head" style="background:${DRIVER_COLOR[c] || '#999'}">${c === sel.boost ? '<span class="boost">2x</span>' : ''}<img src="images/drivers/${esc(c)}.webp" alt="" onerror="this.remove()"></div>
+      <div class="body">
+        <div class="name">${esc(label)}</div>
+        <div class="price"><strong>${p ? money(p.precio) : '—'}</strong>${deltaOf(`piloto:${c}`)}</div>
+      </div>
+    </article>`;
+  };
+
+  const teamSlot = (c, first) => {
+    const info = D.standings.constructors.find((x) => x.id === c);
+    const p = prices[`constructor:${c}`];
+    return `<article class="tslot${first ? ' divider' : ''}">
+      <div class="head" style="background:${TEAM_COLOR[c] || '#999'}"><img src="images/cars/${esc(CAR_SLUG[c] || c)}.webp" alt="" onerror="this.remove()"></div>
+      <div class="body">
+        <div class="name">${esc(info ? info.name : c)}</div>
+        <div class="price"><strong>${p ? money(p.precio) : '—'}</strong>${deltaOf(`constructor:${c}`)}</div>
+      </div>
+    </article>`;
+  };
+
+  $('team-title').textContent = `${team.name} · ${team.owner}`;
+  const shown = slotsFor(team, sel);
+  $('team-slots').innerHTML = shown.drivers.map(driverSlot).join('')
+    + shown.constructors.map((c, i) => teamSlot(c, i === 0)).join('');
+
+  const cost = sel.drivers.reduce((a, c) => a + priceOf('piloto', c), 0)
+    + sel.constructors.reduce((a, c) => a + priceOf('constructor', c), 0);
+  const score = sel.drivers.reduce((a, c) => a + S[c], 0) + S[sel.boost]
+    + sel.constructors.reduce((a, c) => a + T[c], 0);
+  const changes = sel.drivers.filter((c) => !team.drivers.includes(c)).length
+    + sel.constructors.filter((c) => !team.constructors.includes(c)).length;
+  const extra = Math.max(0, changes - team.freeLeft);
+  const movesText = view.mode === 'actual' ? 'Sin cambios'
+    : `Cambios ${changes} (${Math.min(changes, team.freeLeft)} gratis${extra ? `, ${extra} extra: −${extra * EXTRA_TRANSFER_PENALTY} pts estimados` : ''})`;
+  $('team-foot-text').textContent = `${movesText} · Costo ${money(cost)} · Disponible ${money(budget - cost)} · Fuerza estimada ${score.toFixed(2)} · Presupuesto ${money(budget)}`;
+  renderChips(team);
+}
+
+function renderWeekendPicker() {
+  const list = weekendsWithData();
+  if (!list.length) {
+    $('flow').innerHTML = '<p class="hint">Todavía no hay datos de prácticas.</p>';
+    return;
+  }
+
+  // Predeterminado: el fin de semana más reciente con todas sus prácticas.
+  const initial = list.length - 1;
+
+  const slider = $('weekend-slider');
+  slider.max = list.length - 1;
+  slider.value = initial;
+  const show = (i) => {
+    const w = list[i];
+    currentRound = w.round;
+    renderTrack(w.round);
+    const when = w.race ? new Date(`${w.race.date}T00:00:00`).toLocaleDateString('es', { day: 'numeric', month: 'short' }) : '';
+    $('weekend-label').textContent = `R${w.round} · ${w.race ? w.race.name : ''} · ${when}`;
+    renderPanel(w);
+  };
+  slider.oninput = () => show(Number(slider.value));
+  show(initial);
+}
+
+// Clic en "Ver más" despliega la ficha. Clic en una foto marca o desmarca a ese piloto.
+document.addEventListener('click', (e) => {
+  const more = e.target.closest('.flow-more');
+  if (more) {
+    more.closest('.flow-wrap').classList.add('expanded');
+    return;
+  }
+  const pick = e.target.closest('[data-code]');
+  if (pick) {
+    selectedDriver = selectedDriver === pick.dataset.code ? null : pick.dataset.code;
+    applyHighlight();
+    renderSheet();
+  }
+});
+
+window.addEventListener('resize', () => updateFold($('std-wrap')));
+
+let currentRound = null;
+window.addEventListener('resize', checkViewport);
+checkViewport();
+
+document.querySelectorAll('.mode-btn').forEach((btn) => {
+  btn.addEventListener('click', () => {
+    view = { owner: btn.dataset.owner, mode: btn.dataset.mode };
+    document.querySelectorAll('.mode-btn').forEach((b) => {
+      b.classList.toggle('is-on', b.dataset.owner === view.owner && b.dataset.mode === view.mode);
+    });
+    renderTeam();
+  });
+});
+
+$('pred-list').addEventListener('click', (e) => {
+  const chip = e.target.closest('[data-chip]');
+  if (chip) {
+    const i = Number(chip.dataset.chip);
+    predictPicks.chip = predictPicks.chip === i ? null : i;
+    savePredict();
+    renderPredict();
+    return;
+  }
+  const opt = e.target.closest('[data-q][data-k]');
+  if (opt) {
+    predictPicks[Number(opt.dataset.q)] = Number(opt.dataset.k);
+    savePredict();
+    renderPredict();
+  }
+});
+$('pred-list').addEventListener('change', (e) => {
+  const sel = e.target.closest('select[data-pick]');
+  if (!sel) return;
+  const i = Number(sel.dataset.q);
+  const value = sel.value || null;
+  if (sel.dataset.place) predictPicks[i] = { ...(predictPicks[i] || {}), [sel.dataset.place]: value };
+  else predictPicks[i] = value;
+  savePredict();
+  renderPredict();
+});
+$('pred-list').addEventListener('input', (e) => {
+  const slider = e.target.closest('[data-slider]');
+  if (!slider) return;
+  const i = Number(slider.dataset.slider);
+  predictPicks[i] = Number(slider.value);
+  savePredict();
+  slider.closest('.slider-box').querySelector('[data-value]').textContent = slider.value;
+});
+$('pred-reset').addEventListener('click', () => {
+  try { localStorage.removeItem(PREDICT_KEY); } catch (e) { /* sin almacenamiento */ }
+  predictPicks = structuredClone(PREDICT_LOCKED);
+  renderPredict();
+});
+
+predictPicks = loadPredict();
+if (D) render();
+else $('no-data').hidden = false;
+</script>
+</body>
+</html>
