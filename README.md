@@ -37,3 +37,11 @@ El presupuesto de tus equipos (cost cap) no va en este archivo: es tu liga, no e
 ## Historial de predicciones
 
 `registro.py` guarda las respuestas y los resultados reales en `data/historial.db` (SQLite) y exporta `data/historial.js`, que el tablero muestra en "Historial de predicciones". Para registrar un fin de semana nuevo, agrega su bloque en `RONDAS` y corre `python3 registro.py`.
+
+## En la nube
+
+- Código y datos: https://github.com/Kromativo/f1-dashboard (público).
+- Sitio: Vercel, proyecto importado desde ese repositorio (sin build; es estático, `vercel.json` ya está).
+- Actualización automática: `deploy/actualizar-datos.yml` debe estar en `.github/workflows/` del repositorio. Corre `fetch_data.py` y `registro.py` cada 6 horas y sube los cambios; Vercel redespliega solo.
+- La contraseña de entrada es un filtro en el navegador, no seguridad real: los archivos de `data/` siguen siendo públicos.
+- Lo manual sigue igual: `prices/2026.csv`, `upgrades/2026.csv` y las preguntas de `registro.py`.
